@@ -17,6 +17,7 @@ limitations under the License.
 package spdx
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -220,7 +221,18 @@ func (builder *defaultDocBuilderImpl) ScanWorkflows(genopts *DocGenerateOptions,
 	}
 
 	logrus.Infof("Scanning %d workflow path(s) for build dependencies", len(genopts.Workflows))
-	buildPkg, err := WorkflowsToSPDXPackages(genopts.Workflows)
+
+	var buildPkg *Package
+	var err error
+
+	if genopts.ResolveActions {
+		logrus.Info("Resolving transitive dependencies from GitHub Actions")
+		fetcher := NewGitHubContentFetcher()
+		ctx := context.Background()
+		buildPkg, err = WorkflowsToSPDXPackagesResolved(ctx, genopts.Workflows, fetcher)
+	} else {
+		buildPkg, err = WorkflowsToSPDXPackages(genopts.Workflows)
+	}
 	if err != nil {
 		return fmt.Errorf("extracting build dependencies from workflows: %w", err)
 	}

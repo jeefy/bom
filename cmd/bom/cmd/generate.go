@@ -54,6 +54,7 @@ type generateOptions struct {
 	directories    []string
 	ignorePatterns []string
 	workflows      []string
+	resolveActions bool
 }
 
 // Validate verify options consistency.
@@ -211,6 +212,13 @@ completed by a later stage in your CI/CD pipeline. See the
 		"list of GitHub Actions workflow files to scan for build dependencies",
 	)
 
+	generateCmd.PersistentFlags().BoolVar(
+		&genOpts.resolveActions,
+		"resolve-actions",
+		false,
+		"resolve transitive dependencies from GitHub Actions (requires GITHUB_TOKEN for API access)",
+	)
+
 	generateCmd.PersistentFlags().StringSliceVar(
 		&genOpts.ignorePatterns,
 		"ignore",
@@ -353,6 +361,7 @@ func generateBOM(opts *generateOptions) error {
 		LicenseListVersion: opts.licenseListVer,
 		ScanImages:         opts.scanImages,
 		Name:               opts.name,
+		ResolveActions:     opts.resolveActions,
 	}
 
 	// We only replace the ignore patterns one or more where defined

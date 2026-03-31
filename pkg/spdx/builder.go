@@ -155,6 +155,7 @@ type DocGenerateOptions struct {
 	IgnorePatterns      []string              // A slice of regexp patterns to ignore when scanning dirs
 	ExternalDocumentRef []ExternalDocumentRef // List of external documents related to the bom
 	Workflows           []string              // A slice of GitHub Actions workflow file paths to scan for build dependencies
+	ResolveActions      bool                  // Resolve transitive dependencies from GitHub Actions and reusable workflows
 }
 
 func (o *DocGenerateOptions) Validate() error {
