@@ -55,6 +55,8 @@ type generateOptions struct {
 	ignorePatterns []string
 	workflows      []string
 	resolveActions bool
+	runLogRepo     string
+	runLogRunID    int64
 }
 
 // Validate verify options consistency.
@@ -65,8 +67,9 @@ func (opts *generateOptions) Validate() error {
 		len(opts.imageArchives) == 0 &&
 		len(opts.archives) == 0 &&
 		len(opts.directories) == 0 &&
-		len(opts.workflows) == 0 {
-		return errors.New("to generate a SPDX BOM you have to provide at least one image, file, or workflow")
+		len(opts.workflows) == 0 &&
+		opts.runLogRunID == 0 {
+		return errors.New("to generate a SPDX BOM you have to provide at least one image, file, workflow, or run log")
 	}
 
 	if opts.format != spdx.FormatTagValue && opts.format != spdx.FormatJSON {
@@ -219,6 +222,20 @@ completed by a later stage in your CI/CD pipeline. See the
 		"resolve transitive dependencies from GitHub Actions (requires GITHUB_TOKEN for API access)",
 	)
 
+	generateCmd.PersistentFlags().StringVar(
+		&genOpts.runLogRepo,
+		"run-log-repo",
+		"",
+		"GitHub repository (owner/repo) to fetch run logs from for observed dependency analysis",
+	)
+
+	generateCmd.PersistentFlags().Int64Var(
+		&genOpts.runLogRunID,
+		"run-log-run-id",
+		0,
+		"GitHub Actions workflow run ID to download logs from for observed dependency analysis",
+	)
+
 	generateCmd.PersistentFlags().StringSliceVar(
 		&genOpts.ignorePatterns,
 		"ignore",
@@ -362,6 +379,8 @@ func generateBOM(opts *generateOptions) error {
 		ScanImages:         opts.scanImages,
 		Name:               opts.name,
 		ResolveActions:     opts.resolveActions,
+		RunLogRepo:         opts.runLogRepo,
+		RunLogRunID:        opts.runLogRunID,
 	}
 
 	// We only replace the ignore patterns one or more where defined

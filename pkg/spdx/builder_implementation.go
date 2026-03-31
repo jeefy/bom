@@ -47,6 +47,7 @@ type DocBuilderImplementation interface {
 	ScanArchives(*DocGenerateOptions, *SPDX, *Document) error
 	ScanFiles(*DocGenerateOptions, *SPDX, *Document) error
 	ScanWorkflows(*DocGenerateOptions, *SPDX, *Document) error
+	ScanRunLogs(*DocGenerateOptions, *SPDX, *Document) error
 }
 
 // defaultDocBuilderImpl is the default implementation for the
@@ -241,6 +242,33 @@ func (builder *defaultDocBuilderImpl) ScanWorkflows(genopts *DocGenerateOptions,
 	doc.ensureUniquePeerIDs(buildPkg.GetRelationships())
 	if err := doc.AddPackage(buildPkg); err != nil {
 		return fmt.Errorf("adding build dependencies package to document: %w", err)
+	}
+	return nil
+}
+
+func (builder *defaultDocBuilderImpl) ScanRunLogs(genopts *DocGenerateOptions, _ *SPDX, doc *Document) error {
+	if genopts.RunLogRepo == "" || genopts.RunLogRunID == 0 {
+		return nil
+	}
+
+	parts := strings.SplitN(genopts.RunLogRepo, "/", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return fmt.Errorf("invalid run-log-repo format %q, expected owner/repo", genopts.RunLogRepo)
+	}
+	owner, repo := parts[0], parts[1]
+
+	logrus.Infof("Fetching observed build dependencies from %s run %d", genopts.RunLogRepo, genopts.RunLogRunID)
+	fetcher := NewRunLogFetcher()
+	ctx := context.Background()
+	buildPkg, err := RunLogsToSPDXPackages(ctx, owner, repo, genopts.RunLogRunID, fetcher)
+	if err != nil {
+		return fmt.Errorf("extracting observed dependencies from run logs: %w", err)
+	}
+
+	doc.ensureUniqueElementID(buildPkg)
+	doc.ensureUniquePeerIDs(buildPkg.GetRelationships())
+	if err := doc.AddPackage(buildPkg); err != nil {
+		return fmt.Errorf("adding observed build dependencies package to document: %w", err)
 	}
 	return nil
 }

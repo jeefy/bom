@@ -129,6 +129,10 @@ func (db *DocBuilder) Generate(genopts *DocGenerateOptions) (*Document, error) {
 		return nil, fmt.Errorf("scanning workflows: %w", err)
 	}
 
+	if err := db.impl.ScanRunLogs(genopts, spdx, doc); err != nil {
+		return nil, fmt.Errorf("scanning run logs: %w", err)
+	}
+
 	return doc, nil
 }
 
@@ -156,6 +160,8 @@ type DocGenerateOptions struct {
 	ExternalDocumentRef []ExternalDocumentRef // List of external documents related to the bom
 	Workflows           []string              // A slice of GitHub Actions workflow file paths to scan for build dependencies
 	ResolveActions      bool                  // Resolve transitive dependencies from GitHub Actions and reusable workflows
+	RunLogRepo          string                // GitHub repository (owner/repo) to fetch run logs from
+	RunLogRunID         int64                 // GitHub Actions workflow run ID to fetch logs for
 }
 
 func (o *DocGenerateOptions) Validate() error {
