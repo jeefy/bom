@@ -125,6 +125,10 @@ func (db *DocBuilder) Generate(genopts *DocGenerateOptions) (*Document, error) {
 		return nil, fmt.Errorf("scanning files: %w", err)
 	}
 
+	if err := db.impl.ScanWorkflows(genopts, spdx, doc); err != nil {
+		return nil, fmt.Errorf("scanning workflows: %w", err)
+	}
+
 	return doc, nil
 }
 
@@ -150,6 +154,7 @@ type DocGenerateOptions struct {
 	Directories         []string              // A slice of directories to convert into packages
 	IgnorePatterns      []string              // A slice of regexp patterns to ignore when scanning dirs
 	ExternalDocumentRef []ExternalDocumentRef // List of external documents related to the bom
+	Workflows           []string              // A slice of GitHub Actions workflow file paths to scan for build dependencies
 }
 
 func (o *DocGenerateOptions) Validate() error {
@@ -157,9 +162,10 @@ func (o *DocGenerateOptions) Validate() error {
 		len(o.Files) == 0 &&
 		len(o.Images) == 0 &&
 		len(o.Directories) == 0 &&
-		len(o.Archives) == 0 {
+		len(o.Archives) == 0 &&
+		len(o.Workflows) == 0 {
 		return errors.New(
-			"to build a document at least an image, tarball, directory or a file has to be specified",
+			"to build a document at least an image, tarball, directory, file, or workflow has to be specified",
 		)
 	}
 

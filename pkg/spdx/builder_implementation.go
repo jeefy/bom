@@ -45,6 +45,7 @@ type DocBuilderImplementation interface {
 	ScanImageArchives(*DocGenerateOptions, *SPDX, *Document) error
 	ScanArchives(*DocGenerateOptions, *SPDX, *Document) error
 	ScanFiles(*DocGenerateOptions, *SPDX, *Document) error
+	ScanWorkflows(*DocGenerateOptions, *SPDX, *Document) error
 }
 
 // defaultDocBuilderImpl is the default implementation for the
@@ -209,6 +210,25 @@ func (builder *defaultDocBuilderImpl) ScanFiles(genopts *DocGenerateOptions, spd
 				return fmt.Errorf("adding file to document: %w", err)
 			}
 		}
+	}
+	return nil
+}
+
+func (builder *defaultDocBuilderImpl) ScanWorkflows(genopts *DocGenerateOptions, _ *SPDX, doc *Document) error {
+	if len(genopts.Workflows) == 0 {
+		return nil
+	}
+
+	logrus.Infof("Scanning %d workflow path(s) for build dependencies", len(genopts.Workflows))
+	buildPkg, err := WorkflowsToSPDXPackages(genopts.Workflows)
+	if err != nil {
+		return fmt.Errorf("extracting build dependencies from workflows: %w", err)
+	}
+
+	doc.ensureUniqueElementID(buildPkg)
+	doc.ensureUniquePeerIDs(buildPkg.GetRelationships())
+	if err := doc.AddPackage(buildPkg); err != nil {
+		return fmt.Errorf("adding build dependencies package to document: %w", err)
 	}
 	return nil
 }

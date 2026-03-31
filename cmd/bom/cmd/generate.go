@@ -53,6 +53,7 @@ type generateOptions struct {
 	files          []string
 	directories    []string
 	ignorePatterns []string
+	workflows      []string
 }
 
 // Validate verify options consistency.
@@ -62,8 +63,9 @@ func (opts *generateOptions) Validate() error {
 		len(opts.files) == 0 &&
 		len(opts.imageArchives) == 0 &&
 		len(opts.archives) == 0 &&
-		len(opts.directories) == 0 {
-		return errors.New("to generate a SPDX BOM you have to provide at least one image or file")
+		len(opts.directories) == 0 &&
+		len(opts.workflows) == 0 {
+		return errors.New("to generate a SPDX BOM you have to provide at least one image, file, or workflow")
 	}
 
 	if opts.format != spdx.FormatTagValue && opts.format != spdx.FormatJSON {
@@ -201,6 +203,14 @@ completed by a later stage in your CI/CD pipeline. See the
 		"list of directories to include in the manifest as packages",
 	)
 
+	generateCmd.PersistentFlags().StringSliceVarP(
+		&genOpts.workflows,
+		"workflows",
+		"w",
+		[]string{},
+		"list of GitHub Actions workflow files to scan for build dependencies",
+	)
+
 	generateCmd.PersistentFlags().StringSliceVar(
 		&genOpts.ignorePatterns,
 		"ignore",
@@ -308,7 +318,7 @@ completed by a later stage in your CI/CD pipeline. See the
 	if err := generateCmd.MarkPersistentFlagDirname("dirs"); err != nil {
 		logrus.Error("error marking flag as directory")
 	}
-	for _, fl := range []string{"config", "image-archive", "file", "archive"} {
+	for _, fl := range []string{"config", "image-archive", "file", "archive", "workflows"} {
 		if err := generateCmd.MarkPersistentFlagFilename(fl); err != nil {
 			logrus.Error("error marking flag as file")
 		}
@@ -331,6 +341,7 @@ func generateBOM(opts *generateOptions) error {
 		Files:              opts.files,
 		Images:             opts.images,
 		Directories:        opts.directories,
+		Workflows:          opts.workflows,
 		Format:             opts.format,
 		OutputFile:         opts.outputFile,
 		Namespace:          opts.namespace,
