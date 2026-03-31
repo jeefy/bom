@@ -41,6 +41,7 @@ other sources to your SBOM.
   - [Generate a SBOM from the Current Directory](#generate-a-sbom-from-the-current-directory)
   - [Process a Container Image](#process-a-container-image)
   - [Generate a SBOM to describe files](#generate-a-sbom-to-describe-files)
+- [Build-Dependency SBOM Generation](#build-dependency-sbom-generation)
 - [Code of conduct](#code-of-conduct)
 
 ## Installation
@@ -82,6 +83,7 @@ Usage:
 Flags:
   -a, --analyze-images          go deeper into images using the available analyzers
       --archive strings         list of archives to add as packages (supports tar, tar.gz)
+      --build-output string     path to write a separate build-dependencies SPDX document (e.g., build.spdx.json)
   -c, --config string           path to yaml SBOM configuration file
   -d, --dirs strings            list of directories to include in the manifest as packages
   -f, --file strings            list of files to include
@@ -98,7 +100,11 @@ Flags:
       --no-transient            don't include transient go dependencies, only direct deps from go.mod
   -o, --output string           path to the file where the document will be written (defaults to STDOUT)
       --provenance string       path to export the SBOM as an in-toto provenance statement
+      --resolve-actions         resolve transitive dependencies from GitHub Actions (requires GITHUB_TOKEN)
+      --run-log-repo string     GitHub repository (owner/repo) to fetch run logs from
+      --run-log-run-id int      GitHub Actions workflow run ID to download logs from
       --scan-images             scan container images to look for OS information (currently debian only) (default true)
+  -w, --workflows strings       list of GitHub Actions workflow files to scan for build dependencies
 
 Global Flags:
       --log-level string   the logging verbosity, either 'panic', 'fatal', 'error', 'warning', 'info', 'debug', 'trace' (default "info")
@@ -209,6 +215,74 @@ bom generate -n http://example.com/ \
   -f document.md \
   -f other/file.txt
 ```
+
+## Build-Dependency SBOM Generation
+
+`bom` can generate a separate SBOM that captures your project's **build
+dependencies** — the GitHub Actions, CI tools, and runtime installations that
+are used to build, test, and release your software but don't ship in the final
+artifact.
+
+Build-dependency analysis works in three layers, which can be used independently
+or combined:
+
+### Scan Workflow Files
+
+Parse GitHub Actions workflow YAML files to extract the actions referenced in
+each job step. Each action (e.g. `actions/checkout@v4`, `goreleaser/goreleaser-action@v5`)
+is recorded as an SPDX package with a `BUILD_TOOL_OF` relationship to the root
+document.
+
+```console
+bom generate -w .github/workflows/*.yml --build-output build.spdx.json --format json
+```
+
+### Resolve Transitive Dependencies
+
+With `--resolve-actions`, `bom` fetches each referenced action's own
+`action.yml` manifest from GitHub and recursively resolves any composite
+actions it depends on. This requires a `GITHUB_TOKEN` environment variable.
+
+```console
+export GITHUB_TOKEN="ghp_..."
+bom generate \
+  -w .github/workflows/*.yml \
+  --resolve-actions \
+  --build-output build.spdx.json --format json
+```
+
+### Analyze CI Run Logs
+
+Point `bom` at a specific GitHub Actions workflow run to download and parse
+its logs for runtime tool installations (e.g. `go install`, `pip install`,
+`apt-get install`, `npm install -g`, `curl | bash` patterns). Detected tools
+are added as SPDX packages with version information when available.
+
+```console
+bom generate \
+  --run-log-repo kubernetes-sigs/bom \
+  --run-log-run-id 12345678 \
+  --build-output build.spdx.json --format json
+```
+
+### Combined Analysis
+
+All three layers can be combined in a single invocation for the most complete
+build-dependency SBOM:
+
+```console
+export GITHUB_TOKEN="ghp_..."
+bom generate \
+  -w .github/workflows/*.yml \
+  --resolve-actions \
+  --run-log-repo kubernetes-sigs/bom \
+  --run-log-run-id 12345678 \
+  --build-output build.spdx.json --format json
+```
+
+The `--build-output` flag writes build dependencies to a **separate** SPDX
+document, keeping them isolated from the main software SBOM. If `--build-output`
+is omitted, build dependencies are included in the primary document instead.
 
 ## Code of conduct
 

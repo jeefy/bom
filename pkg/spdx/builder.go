@@ -125,6 +125,44 @@ func (db *DocBuilder) Generate(genopts *DocGenerateOptions) (*Document, error) {
 		return nil, fmt.Errorf("scanning files: %w", err)
 	}
 
+	// When a separate build output file is requested, skip build scans
+	// here — they will be handled by GenerateBuildDoc instead.
+	if genopts.BuildOutputFile == "" {
+		if err := db.impl.ScanWorkflows(genopts, spdx, doc); err != nil {
+			return nil, fmt.Errorf("scanning workflows: %w", err)
+		}
+
+		if err := db.impl.ScanRunLogs(genopts, spdx, doc); err != nil {
+			return nil, fmt.Errorf("scanning run logs: %w", err)
+		}
+	}
+
+	return doc, nil
+}
+
+// GenerateBuildDoc creates a separate SPDX document containing only build
+// dependencies extracted from workflow files and/or run logs.
+func (db *DocBuilder) GenerateBuildDoc(genopts *DocGenerateOptions) (*Document, error) {
+	if err := db.impl.ReadYamlConfiguration(genopts.ConfigFile, genopts); err != nil {
+		return nil, fmt.Errorf("parsing configuration file: %w", err)
+	}
+
+	spdx, err := db.impl.CreateSPDXClient(genopts, db.options)
+	if err != nil {
+		return nil, errors.New("generating spdx client")
+	}
+
+	doc, err := db.impl.CreateDocument(genopts, spdx)
+	if err != nil {
+		return nil, fmt.Errorf("creating build spdx document: %w", err)
+	}
+
+	if doc.Name != "" {
+		doc.Name = doc.Name + "-build-deps"
+	} else {
+		doc.Name = "build-dependencies"
+	}
+
 	if err := db.impl.ScanWorkflows(genopts, spdx, doc); err != nil {
 		return nil, fmt.Errorf("scanning workflows: %w", err)
 	}
@@ -162,6 +200,7 @@ type DocGenerateOptions struct {
 	ResolveActions      bool                  // Resolve transitive dependencies from GitHub Actions and reusable workflows
 	RunLogRepo          string                // GitHub repository (owner/repo) to fetch run logs from
 	RunLogRunID         int64                 // GitHub Actions workflow run ID to fetch logs for
+	BuildOutputFile     string                // Path to write a separate build-dependencies SPDX document
 }
 
 func (o *DocGenerateOptions) Validate() error {
@@ -170,9 +209,10 @@ func (o *DocGenerateOptions) Validate() error {
 		len(o.Images) == 0 &&
 		len(o.Directories) == 0 &&
 		len(o.Archives) == 0 &&
-		len(o.Workflows) == 0 {
+		len(o.Workflows) == 0 &&
+		o.RunLogRunID == 0 {
 		return errors.New(
-			"to build a document at least an image, tarball, directory, file, or workflow has to be specified",
+			"to build a document at least an image, tarball, directory, file, workflow, or run log has to be specified",
 		)
 	}
 

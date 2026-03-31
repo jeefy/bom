@@ -34,29 +34,30 @@ import (
 )
 
 type generateOptions struct {
-	analyze        bool
-	noGitignore    bool
-	noGoModules    bool
-	noGoTransient  bool
-	scanImages     bool
-	name           string // Name to use in the document
-	namespace      string
-	format         string
-	outputFile     string
-	configFile     string
-	license        string
-	licenseListVer string
-	provenancePath string // Path to export the SBOM as provenance statement
-	images         []string
-	imageArchives  []string
-	archives       []string
-	files          []string
-	directories    []string
-	ignorePatterns []string
-	workflows      []string
-	resolveActions bool
-	runLogRepo     string
-	runLogRunID    int64
+	analyze         bool
+	noGitignore     bool
+	noGoModules     bool
+	noGoTransient   bool
+	scanImages      bool
+	name            string // Name to use in the document
+	namespace       string
+	format          string
+	outputFile      string
+	configFile      string
+	license         string
+	licenseListVer  string
+	provenancePath  string // Path to export the SBOM as provenance statement
+	images          []string
+	imageArchives   []string
+	archives        []string
+	files           []string
+	directories     []string
+	ignorePatterns  []string
+	workflows       []string
+	resolveActions  bool
+	runLogRepo      string
+	runLogRunID     int64
+	buildOutputFile string
 }
 
 // Validate verify options consistency.
@@ -236,6 +237,13 @@ completed by a later stage in your CI/CD pipeline. See the
 		"GitHub Actions workflow run ID to download logs from for observed dependency analysis",
 	)
 
+	generateCmd.PersistentFlags().StringVar(
+		&genOpts.buildOutputFile,
+		"build-output",
+		"",
+		"path to write a separate build-dependencies SPDX document (e.g., build.spdx.json)",
+	)
+
 	generateCmd.PersistentFlags().StringSliceVar(
 		&genOpts.ignorePatterns,
 		"ignore",
@@ -381,6 +389,7 @@ func generateBOM(opts *generateOptions) error {
 		ResolveActions:     opts.resolveActions,
 		RunLogRepo:         opts.runLogRepo,
 		RunLogRunID:        opts.runLogRunID,
+		BuildOutputFile:    opts.buildOutputFile,
 	}
 
 	// We only replace the ignore patterns one or more where defined
@@ -410,6 +419,24 @@ func generateBOM(opts *generateOptions) error {
 			return fmt.Errorf("writing SBOM: %w", err)
 		}
 	}
+
+	if opts.buildOutputFile != "" {
+		buildDoc, err := builder.GenerateBuildDoc(builderOpts)
+		if err != nil {
+			return fmt.Errorf("generating build dependencies document: %w", err)
+		}
+
+		buildMarkup, err := renderer.Serialize(buildDoc)
+		if err != nil {
+			return fmt.Errorf("serializing build dependencies document: %w", err)
+		}
+
+		if err := os.WriteFile(opts.buildOutputFile, []byte(buildMarkup), 0o664); err != nil { //nolint:gosec // G306: Expect WriteFile
+			return fmt.Errorf("writing build dependencies SBOM: %w", err)
+		}
+		logrus.Infof("Build dependencies SBOM written to %s", opts.buildOutputFile)
+	}
+
 	// Export the SBOM as in-toto provenance
 	if opts.provenancePath != "" {
 		if err := doc.WriteProvenanceStatement(
